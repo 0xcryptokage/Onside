@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Onside — live World Cup goal alerts
 
 Watches all live World Cup fixtures via TxLINE, detects real goals (by
@@ -97,3 +98,6 @@ assets/flags-png/         — 271 pre-rendered flag PNGs
 assets/fonts/             — bundled Poppins font files
 assets/ball_circle.png    — pre-masked ball graphic
 ```
+=======
+# Onside
+>>>>>>> edffaa8a7bce5d6ea78edac01ddce9ab4e18b82c
