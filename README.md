@@ -58,30 +58,6 @@ posting just silently skips with a log message.
 - Flag mapping + fallback behavior (skip both flags if either team is
   unmapped)
 
-**NOT yet verified — test these first, in this order:**
-
-1. **`npm install` itself** — this project uses `node-canvas`, which needs
-   system libraries (`libcairo2-dev`, `libpango1.0-dev`, `libjpeg-dev`,
-   `libgif-dev`, `librsvg2-dev`, `build-essential` on Ubuntu/Debian — if
-   you're on Mac, `brew install pkg-config cairo pango libpng jpeg giflib
-   librsvg`). I could not test-run this myself — my sandbox blocks the
-   `nodejs.org` download `node-gyp` needs, so this genuinely needs to be
-   tried on your machine first.
-
-2. **The stat-key assumption in `lib/txlineData.js`** — flagged in a
-   comment there. Run the service once, and if goals aren't detected
-   correctly, add a `console.log(JSON.stringify(events, null, 2))` right
-   after fetching a live snapshot and check what the real `Stats` keys
-   look like — they may need period-offset adjustment.
-
-3. **Font rendering** — `node-canvas`'s font handling can be finicky
-   across OSes. If text doesn't render or looks wrong, that's the first
-   place to check (font registration in `cardRenderer.js`).
-
-4. **One real end-to-end test**: point the service at a live match (or
-   temporarily lower `POLL_INTERVAL_MS` and watch the console output),
-   confirm a real goal produces a real Telegram post with correct data.
-
 ## Project structure
 
 ```
