@@ -1,0 +1,16 @@
+{
+  "name": "onside-bot",
+  "version": "1.0.0",
+  "description": "Live World Cup goal/card/corner alerts for Telegram and Twitter, powered by TxLINE",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.53",
+    "dotenv": "^16.4.5",
+    "node-fetch": "^2.7.0",
+    "node-telegram-bot-api": "^0.66.0",
+    "twitter-api-v2": "^1.29.0"
+  }
+}
