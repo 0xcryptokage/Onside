@@ -1,10 +1,23 @@
-<<<<<<< HEAD
-# Onside — live World Cup goal alerts
+# Onside — live World Cup alerts, verified predictions
 
-Watches all live World Cup fixtures via TxLINE, detects real goals (by
-watching the actual goal-count stats change, not by guessing at event
-labels), renders a branded alert card, and posts it to Telegram (and
-Twitter/X once configured).
+Watches live World Cup fixtures via TxLINE, detects real match events (by
+watching the actual stat numbers change — goals, cards — not by guessing
+at event labels), renders branded alert cards, and posts them to Telegram
+and Twitter/X. Also runs a "who wins?" prediction game on both platforms:
+fans reply with their pick within a 30-minute window, and whoever called
+it first (and correctly) gets their own decorative "Called it first!" card.
+
+## What it does
+
+- **Goal / Yellow Card / Red Card alerts** — auto-detected, auto-posted,
+  with a randomized template pick per event type for visual variety
+- **"Who wins?" prediction prompts** — posted at kickoff, image-based,
+  inviting replies on both Telegram and Twitter/X
+- **30-minute reply window** — predictions after the window closes are
+  ignored, even if fetched late
+- **"Called it first!" resolution** — at full time, finds whoever predicted
+  correctly earliest (per platform, independently) and posts a card with
+  their real profile picture
 
 ## Setup
 
@@ -13,11 +26,15 @@ npm install
 cp .env.example .env
 ```
 
-Fill in `.env`:
-- `TXLINE_API_TOKEN` — already have this from earlier testing
-- `TELEGRAM_BOT_TOKEN` — from BotFather (you already have this)
-- `TELEGRAM_CHAT_ID` — the chat/channel/group ID to post into (see below
-  for how to find it)
+Fill in `.env` — see the comments in `.env.example` for what each variable
+is and where to get it. The two less obvious ones:
+
+- **`TELEGRAM_DISCUSSION_GROUP_ID`** — your channel needs a *linked
+  discussion group* for people to be able to reply at all (a Telegram
+  channel alone is broadcast-only). See "Setting up the discussion group"
+  below.
+- **`TWITTER_BEARER_TOKEN`** — a separate, read-only credential from your
+  posting keys, needed specifically to search/read replies.
 
 Then run:
 ```bash
@@ -29,75 +46,93 @@ node index.js
 1. Add your bot to the group/channel you want it posting in
 2. Send any message in that chat
 3. Visit `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` in a browser
-4. Look for `"chat":{"id": ...}` in the response — that number (often
-   negative for groups) is your `TELEGRAM_CHAT_ID`
+4. Look for `"chat":{"id": ...}` in the response
 
-## Setting up Twitter/X (optional, do this whenever ready)
+## Setting up the discussion group (for predictions to work)
 
-1. Go to developer.x.com, apply for a developer account
+A Telegram channel can't receive direct replies by default. To let people
+predict:
+
+1. Create a new Telegram group
+2. In your channel's settings → **Discussion** → link that group
+3. Add your bot to the new group too, as an admin
+4. Send a test message in the group, check `getUpdates` the same way as
+   above — the group's `chat.id` (shown as `type: "supergroup"`) is your
+   `TELEGRAM_DISCUSSION_GROUP_ID`
+5. **Recommended**: turn off "Remain Anonymous" for admins in the group's
+   settings — otherwise admin replies (including your own testing) show up
+   under the generic `GroupAnonymousBot` identity instead of a real
+   username, and we can't fetch a profile picture for that.
+
+## Setting up Twitter/X
+
+1. Go to developer.x.com, apply for a developer account (pay-per-use
+   pricing as of Feb 2026 — posting costs ~$0.015/tweet, reading costs
+   less; a few dollars covers a full hackathon demo comfortably)
 2. Create a Project + App
-3. **Critical**: in the app's settings, set permissions to "Read and Write"
-   (defaults to read-only)
-4. Generate API Key, API Key Secret, Access Token, Access Token Secret
-5. Add all four to `.env`
-6. `npm install twitter-api-v2`
-7. The bot will automatically start posting to both platforms — no code
-   changes needed, `twitterPoster.js` already checks for these and
-   activates itself
+3. **Critical**: set permissions to "Read and Write" *before* generating
+   your Access Token — if you generate the token first and change
+   permissions after, you'll need to regenerate the token
+4. Generate all five credentials: API Key, API Key Secret, Access Token,
+   Access Token Secret, and the separate read-only **Bearer Token**
+5. Add all five to `.env`, plus `TWITTER_BOT_USERNAME`
+6. The bot activates Twitter posting automatically once these are present
+   — no code changes needed
 
-Until then, the bot works completely fine on Telegram alone — Twitter
-posting just silently skips with a log message.
+Until configured, the bot works completely fine on Telegram alone —
+Twitter posting/reading just silently skips with a log message.
 
-## What's verified vs. what needs a real test
+## Testing the prediction flow without a live match
 
-**Verified working** (proven in earlier testing sessions):
-- TxLINE auth flow (JWT + API token + 401 auto-refresh)
-- Fixture list fetching
-- Card rendering layout (proven in Python/Pillow, ported to node-canvas
-  with the same logic)
-- Flag mapping + fallback behavior (skip both flags if either team is
-  unmapped)
+Three scripts let you test the whole predict → reply → resolve flow using
+a fake fixture, without waiting for a real match:
 
-**NOT yet verified — test these first, in this order:**
+```bash
+node test-predict-post.js     # posts the "WHO WINS?" prompt
+# → go reply to it yourself, on Telegram and/or Twitter
+node test-predict-check.js    # fetches + parses your reply
+node test-predict-resolve.js France   # simulates "France won", posts the winner card
+```
 
-1. **`npm install` itself** — this project uses `node-canvas`, which needs
-   system libraries (`libcairo2-dev`, `libpango1.0-dev`, `libjpeg-dev`,
-   `libgif-dev`, `librsvg2-dev`, `build-essential` on Ubuntu/Debian — if
-   you're on Mac, `brew install pkg-config cairo pango libpng jpeg giflib
-   librsvg`). I could not test-run this myself — my sandbox blocks the
-   `nodejs.org` download `node-gyp` needs, so this genuinely needs to be
-   tried on your machine first.
+`test-predict-post.js` has a `POST_TO_TWITTER` toggle at the top — set to
+`false` to test Telegram only, without spending any X API credits.
 
-2. **The stat-key assumption in `lib/txlineData.js`** — flagged in a
-   comment there. Run the service once, and if goals aren't detected
-   correctly, add a `console.log(JSON.stringify(events, null, 2))` right
-   after fetching a live snapshot and check what the real `Stats` keys
-   look like — they may need period-offset adjustment.
+## Known limitations (being upfront about these)
 
-3. **Font rendering** — `node-canvas`'s font handling can be finicky
-   across OSes. If text doesn't render or looks wrong, that's the first
-   place to check (font registration in `cardRenderer.js`).
-
-4. **One real end-to-end test**: point the service at a live match (or
-   temporarily lower `POLL_INTERVAL_MS` and watch the console output),
-   confirm a real goal produces a real Telegram post with correct data.
+- **No player-level data** — TxLINE's feed (as far as we've confirmed by
+  actually testing it) only gives team-level stat changes, not who
+  scored/was booked. Cards show the team, not the player.
+- **Draws aren't resolvable in the prediction game** — the current design
+  only matches team-name predictions, so if a match ends in a draw, nobody
+  can have "predicted" that outcome correctly. Known gap, not a bug.
+- **Simultaneous events**: if both teams score/get booked within the same
+  ~12-second poll window, only one card posts (defaults to the home team).
+  Rare edge case.
+- **Reply-window resolution timing**: matching a reply to a specific
+  prompt on Telegram uses a simplified "any message in the discussion
+  group during the 30-minute window" rule, rather than strict reply-chain
+  matching (which would need extra complexity around Telegram's
+  channel-to-group auto-forwarding).
+- **Prediction prompt template**: currently reuses the goal card
+  backgrounds. A dedicated background is planned but not yet built.
 
 ## Project structure
 
 ```
-index.js                 — main polling loop
-lib/txlineAuth.js         — JWT/API token management
-lib/txlineData.js         — fixture + score fetching, stat diffing
-lib/cardRenderer.js       — node-canvas card rendering
-lib/telegramPoster.js     — Telegram sendPhoto
-lib/twitterPoster.js      — Twitter/X posting (stub until configured)
-lib/state.js              — persisted dedup state
-data/teamFlags.js         — team name → flag PNG mapping
-assets/templates/         — the two goal card template PNGs
-assets/flags-png/         — 271 pre-rendered flag PNGs
-assets/fonts/             — bundled Poppins font files
-assets/ball_circle.png    — pre-masked ball graphic
+index.js                    — main polling loop (goals/cards, prompts, resolution)
+lib/txlineAuth.js           — JWT/API token management with auto-refresh
+lib/txlineData.js           — fixture + score fetching, stat diffing
+lib/cardRenderer.js         — all card rendering (goal/yellow/red/prompt/winner)
+lib/telegramPoster.js       — Telegram sendPhoto
+lib/telegramReader.js       — Telegram discussion group message reading
+lib/twitterPoster.js        — Twitter/X posting
+lib/twitterReader.js        — Twitter/X reply reading + parsing
+lib/predictionStore.js      — platform-independent prediction tracking
+lib/state.js                — persisted dedup state for match stats
+data/teamFlags.js           — team name → flag PNG mapping
+assets/templates/           — goal/yellow/red card template PNGs
+assets/flags-png/           — 271 pre-rendered flag PNGs
+assets/fonts/                — bundled Poppins font files
+assets/ball_circle.png      — pre-masked ball graphic
+test-predict-*.js           — manual prediction-flow test scripts
 ```
-=======
-# Onside
->>>>>>> edffaa8a7bce5d6ea78edac01ddce9ab4e18b82c

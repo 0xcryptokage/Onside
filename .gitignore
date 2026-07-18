@@ -1,3 +1,5 @@
 node_modules
 .env
 .state.json
+.predictions.json
+.telegram-offset.json
