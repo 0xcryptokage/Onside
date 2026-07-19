@@ -1,5 +1,25 @@
-node_modules
+# Dependencies
+node_modules/
+
+# Secrets — NEVER commit these
 .env
-.state.json
+mainnet-bot-wallet.json
+mainnet-credentials.json
+*wallet*.json
+
+# Runtime state (regenerates automatically, not source code)
 .predictions.json
-.telegram-offset.json
+
+# Test / diagnostic scripts from tonight's debugging session
+diagnose-live.js
+check-stall-context.js
+check-france-england-historical.js
+check-balance.js
+generate-wallet.js
+
+# Test data dumps
+france-england-full.json
+historical-*.json
+scores-output*.json
+updates-output*.json
+*-preview.png

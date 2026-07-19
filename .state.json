@@ -1,0 +1,34 @@
+{
+  "18257739": {
+    "goalsHome": 0,
+    "goalsAway": 0,
+    "yellowHome": 0,
+    "yellowAway": 1,
+    "redHome": 0,
+    "redAway": 0,
+    "cornersHome": 2,
+    "cornersAway": 0,
+    "clock": {
+      "Running": false,
+      "Seconds": 2700
+    },
+    "latestSeq": 468,
+    "gameFinalised": false
+  },
+  "18257865": {
+    "goalsHome": 0,
+    "goalsAway": 3,
+    "yellowHome": 0,
+    "yellowAway": 0,
+    "redHome": 0,
+    "redAway": 0,
+    "cornersHome": 2,
+    "cornersAway": 2,
+    "clock": {
+      "Running": false,
+      "Seconds": 0
+    },
+    "latestSeq": 1196,
+    "gameFinalised": true
+  }
+}
