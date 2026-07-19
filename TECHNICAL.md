@@ -49,9 +49,13 @@ source:
 # Feedback on the TxLINE API
 
 **What we liked:**
-- The free, real-time World Cup tier or mainnet is a genuinely
-  frictionless way for a hackathon builder to get real, live-quality
-  access — no paywall, just a low-cost on-chain subscribe call.
+- Player-level detail is genuinely there, not just team-level. Once we
+understood the schema, we could resolve real scorer and booked-player
+names — including correctly distinguishing penalty goals from open-play
+goals — by cross-referencing lineup data against event player IDs. That
+level of granularity, available live, let us build a noticeably richer
+product than a generic "Team A 1-0 Team B" alert bot.
+
 - The normalised stat-key schema (goals/cards/corners as consistent
   numeric keys across competitions) made the core detection logic simple
   once understood.
