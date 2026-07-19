@@ -74,41 +74,69 @@ source:
    Quickstart example shows this as a plain `axios.get` call returning
    JSON, but in practice it returns a `text/event-stream` (SSE) response,
    which broke on first try until we built our own SSE parser.
-4. **`/api/scores/snapshot/{fixtureId}` sometimes delivers event data late
-   and in a batch, rather than live as it happens — confirmed directly,
-   not assumed, via repeated polling and cross-checking against real
-   match state.** During the World Cup Final (FixtureId `18257739`), the
-   match clock itself kept advancing in real time throughout, but a
-   specific stat (`corners`) did not reflect what was actually happening
-   on the pitch as it happened — it lagged significantly behind, then
-   jumped straight to the correct number once it finally caught up,
-   rather than updating incrementally as each real corner occurred. We
-   polled `/snapshot` on the same fixture twice, ~4.5 minutes apart, and
-   saw `Seq` move `707 → 765` and the clock move `4351s → 4622s` — both
-   advancing completely normally — while `corners` stayed stuck at `2-1`
-   (3 total) both times, even though the real match had genuinely
-   reached 9 total corners by then (confirmed against a live broadcast).
-   Checking again later, once the match clock had reached 113 minutes,
-   the snapshot had finally caught up — `corners` jumped straight to
-   `8-1`, reflecting events that had actually happened several real-time
-   minutes earlier, delivered all at once rather than as they occurred.
-   Goals, yellow cards, and red cards did not show this same lag in the
-   same window. Since `/snapshot` holds exactly one "latest" entry per
-   event type (see point #1), this suggests the corner event type's slot
-   specifically fell behind and only periodically catches up, rather than
-   updating live — worth investigating for anything built around
-   real-time, as-it-happens alerting.
+4. **`/api/scores/snapshot/{fixtureId}` sometimes returns stale data during
+   live play — confirmed directly, not assumed, via repeated polling and
+   cross-checking against real match state.** We observed two distinct
+   patterns of this, both on real World Cup fixtures:
 
-   We can't say for certain how often this occurs or what triggers it,
-   but it's real, reproducible, and worth flagging — especially for
-   anything built around must-not-miss live alerting.
+   - **Full freeze:** the entire snapshot response — the internal `Seq`
+     counter, the match clock, and every stat — stops advancing
+     completely, even though the match is actively continuing. We
+     confirmed this twice: once mid-match (a fixture stuck showing a 0-3
+     score with the clock reading `Seconds: 0`, `Running: false`, while
+     the real match had reached 4-6 — verified against
+     `/api/scores/historical/`, which had the complete, correct record
+     the whole time, proving the underlying data collection was fine and
+     only the live-serving layer had stalled), and again later, live on
+     the World Cup Final itself (FixtureId `18257739`), where we polled
+     `/snapshot` every 5 seconds for over a minute — matching our bot's
+     real polling cadence exactly — and captured `Seq` and the clock's
+     `Seconds` value both frozen at the same numbers (`Seq 1173`, `6300s`)
+     across at least 8 consecutive polls, while play was confirmed
+     actively ongoing (not paused, mid-extra-time) at the time. Every
+     poll returned a clean `HTTP 200` with no rate-limit headers present,
+     ruling out client-side throttling as the cause. (We didn't log the
+     `Running` flag specifically during this second freeze, only
+     `Seconds`, so we can't say for certain whether the API was reporting
+     `Running: true` or `false` in that exact window — worth a more
+     precise follow-up test if we get the chance.) This second freeze
+     resolved on its own a few minutes later, with no action taken on our
+     end — `Seq` and the clock picked back up and continued advancing
+     normally, confirming the stall was transient rather than a permanent
+     break in the feed for that fixture.
+   - **Delayed, batched event delivery (confirmed):** the match clock
+     itself kept advancing in real time throughout, but a specific stat
+     (`corners`) did not reflect what was actually happening on the pitch
+     as it happened — it lagged significantly behind, then jumped
+     straight to the correct number once it finally caught up, rather
+     than updating incrementally as each real corner occurred. We polled
+     `/snapshot` on the same Final fixture (`18257739`) twice, ~4.5
+     minutes apart, and saw `Seq` move `707 → 765` and the clock move
+     `4351s → 4622s` — both advancing completely normally — while
+     `corners` stayed stuck at `2-1` (3 total) both times, even though
+     the real match had genuinely reached 9 total corners by then
+     (confirmed against a live broadcast). Checking again later, once the
+     match clock had reached 113 minutes, the snapshot had finally caught
+     up — `corners` jumped straight to `8-1`, reflecting events that had
+     actually happened several real-time minutes earlier, delivered all
+     at once rather than as they occurred. Goals, yellow cards, and red
+     cards did not show this same lag in the same window. Since
+     `/snapshot` holds exactly one "latest" entry per event type (see
+     point #1), this suggests the corner event type's slot specifically
+     fell behind and only periodically catches up, rather than updating
+     live — worth investigating for anything built around real-time,
+     as-it-happens alerting.
+
+   We can't say for certain how often either pattern occurs or what
+   triggers them, but both are real, reproducible, and worth flagging —
+   especially for anything built around must-not-miss live alerting.
 
 Overall: a genuinely capable, fast-to-integrate API once these quirks are
 understood — most of our build time went into handling real-data edge
 cases (event clustering, non-chronological ordering, penalty vs.
 open-play goal shapes) rather than fighting the API surface itself. The
-live-reliability issue (point #4) was the most significant one we
-encountered, and — given it recurred within the same match — is the one
-thing we'd most want the TxLINE team to investigate before builders rely
-on `/snapshot` for time-critical, must-not-miss consumer alerting at
-scale.
+live-reliability stalls (points #4-6) were the most significant issue we
+encountered, and — given they recurred multiple times on the World Cup
+Final itself — are the one thing we'd most want the TxLINE team to
+investigate before builders rely on `/snapshot` for time-critical, must-
+not-miss consumer alerting at scale.
