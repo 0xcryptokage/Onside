@@ -74,35 +74,41 @@ source:
    Quickstart example shows this as a plain `axios.get` call returning
    JSON, but in practice it returns a `text/event-stream` (SSE) response,
    which broke on first try until we built our own SSE parser.
-4. **We experienced an extended live-data stall** on `/snapshot` for one
-   real fixture — the endpoint kept returning identical, frozen data for
-   an extended period while the match continued (confirmed via the
-   `/historical` endpoint, which had the complete, correct data the whole
-   time). Worth flagging as a live-reliability edge case, since the
-   underlying data collection was fine — only the live-serving layer
-   stalled.
-5. **We also observed a second, narrower version of the same class of
-   issue — this time isolated to a single event type — live during the
-   World Cup Final itself (FixtureId `18257739`, Spain v Argentina).**
-   Two consecutive polls of `/api/scores/snapshot/18257739`, taken about
-   4.5 minutes apart, showed the match clock and internal `Seq` counter
-   both advancing normally (`Seq 707 → 765`, clock `4351s → 4622s`) —
-   confirming the live feed itself was healthy and actively updating.
-   However, the `corners` stat stayed frozen at `2-1` (3 total) across
-   both polls, while the real match had genuinely reached **9 total
-   corners** at that point (confirmed against a live broadcast). Every
-   other tracked stat (goals, yellow cards, red cards) appeared to be
-   updating correctly in the same window — only the corner event type's
-   single "latest" slot in the snapshot response seems to have stopped
-   refreshing, despite six real corners happening in the interim. This
-   points to a per-event-type reliability issue within the snapshot
-   endpoint's internals (recall from point #1: `/snapshot` holds exactly
-   one "latest" entry per event type) — worth investigating whether
-   certain event types are more prone to dropped updates than others,
-   since goals/cards did not appear to exhibit the same issue during this
-   window.
+4. **`/api/scores/snapshot/{fixtureId}` sometimes delivers event data late
+   and in a batch, rather than live as it happens — confirmed directly,
+   not assumed, via repeated polling and cross-checking against real
+   match state.** During the World Cup Final (FixtureId `18257739`), the
+   match clock itself kept advancing in real time throughout, but a
+   specific stat (`corners`) did not reflect what was actually happening
+   on the pitch as it happened — it lagged significantly behind, then
+   jumped straight to the correct number once it finally caught up,
+   rather than updating incrementally as each real corner occurred. We
+   polled `/snapshot` on the same fixture twice, ~4.5 minutes apart, and
+   saw `Seq` move `707 → 765` and the clock move `4351s → 4622s` — both
+   advancing completely normally — while `corners` stayed stuck at `2-1`
+   (3 total) both times, even though the real match had genuinely
+   reached 9 total corners by then (confirmed against a live broadcast).
+   Checking again later, once the match clock had reached 113 minutes,
+   the snapshot had finally caught up — `corners` jumped straight to
+   `8-1`, reflecting events that had actually happened several real-time
+   minutes earlier, delivered all at once rather than as they occurred.
+   Goals, yellow cards, and red cards did not show this same lag in the
+   same window. Since `/snapshot` holds exactly one "latest" entry per
+   event type (see point #1), this suggests the corner event type's slot
+   specifically fell behind and only periodically catches up, rather than
+   updating live — worth investigating for anything built around
+   real-time, as-it-happens alerting.
+
+   We can't say for certain how often this occurs or what triggers it,
+   but it's real, reproducible, and worth flagging — especially for
+   anything built around must-not-miss live alerting.
 
 Overall: a genuinely capable, fast-to-integrate API once these quirks are
 understood — most of our build time went into handling real-data edge
 cases (event clustering, non-chronological ordering, penalty vs.
-open-play goal shapes) rather than fighting the API surface itself.
+open-play goal shapes) rather than fighting the API surface itself. The
+live-reliability issue (point #4) was the most significant one we
+encountered, and — given it recurred within the same match — is the one
+thing we'd most want the TxLINE team to investigate before builders rely
+on `/snapshot` for time-critical, must-not-miss consumer alerting at
+scale.
