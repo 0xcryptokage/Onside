@@ -49,9 +49,12 @@ source:
 # Feedback on the TxLINE API
 
 **What we liked:**
-- The free, real-time World Cup tier or mainnet is a genuinely
-  frictionless way for a hackathon builder to get real, live-quality
-  access — no paywall, just a low-cost on-chain subscribe call.
+- **Player-level detail is genuinely there, not just team-level.** Once we
+  understood the schema, we could resolve real scorer and booked-player
+  names — including correctly distinguishing penalty goals from open-play
+  goals — by cross-referencing lineup data against event player IDs. That
+  level of granularity, available live, let us build a noticeably richer
+  product than a generic "Team A 1-0 Team B" alert bot.
 - The normalised stat-key schema (goals/cards/corners as consistent
   numeric keys across competitions) made the core detection logic simple
   once understood.
@@ -78,6 +81,26 @@ source:
    time). Worth flagging as a live-reliability edge case, since the
    underlying data collection was fine — only the live-serving layer
    stalled.
+5. **We also observed a second, narrower version of the same class of
+   issue — this time isolated to a single event type — live during the
+   World Cup Final itself (FixtureId `18257739`, Spain v Argentina).**
+   Two consecutive polls of `/api/scores/snapshot/18257739`, taken about
+   4.5 minutes apart, showed the match clock and internal `Seq` counter
+   both advancing normally (`Seq 707 → 765`, clock `4351s → 4622s`) —
+   confirming the live feed itself was healthy and actively updating.
+   However, the `corners` stat stayed frozen at `2-1` (3 total) across
+   both polls, while the real match had genuinely reached **9 total
+   corners** at that point (confirmed against a live broadcast). Every
+   other tracked stat (goals, yellow cards, red cards) appeared to be
+   updating correctly in the same window — only the corner event type's
+   single "latest" slot in the snapshot response seems to have stopped
+   refreshing, despite six real corners happening in the interim. This
+   points to a per-event-type reliability issue within the snapshot
+   endpoint's internals (recall from point #1: `/snapshot` holds exactly
+   one "latest" entry per event type) — worth investigating whether
+   certain event types are more prone to dropped updates than others,
+   since goals/cards did not appear to exhibit the same issue during this
+   window.
 
 Overall: a genuinely capable, fast-to-integrate API once these quirks are
 understood — most of our build time went into handling real-data edge
